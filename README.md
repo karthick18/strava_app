@@ -2,8 +2,8 @@
 This app tries to obtain all the segments the athlete has taken to reach the end of the segment to
 come out with the athlete's segment count.
 
-It takes as input the athlete's end latitude and longitude coordinates and tries to find
-all the segments leading to it within a specified distance and a start range (both in kms).
+It takes as input the segment's end latitude and longitude coordinates and tries to find
+all the segments and athlete segment count leading to it within a specified distance and a start range (both in kms).
 
 **This is just work in progress and does not work as expected considering the strava
 segment explorer api only returns the 10 most popular segments instead of returning all**
