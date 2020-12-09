@@ -22,4 +22,5 @@ Fill in the secret and id in strava_secret.py. To generate the client access tok
 by visiting `http://localhost:8000`. Then restart to use the app.
 
 Happy Hacking,
+
  --Karthick
