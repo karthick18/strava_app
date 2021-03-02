@@ -14,7 +14,16 @@ def get_latlng(lat, lng, d, bearing='south_west'):
     degrees = bearing_map[bearing]
     origin = geopy.Point(lat, lng)
     dest = geopy.distance.distance(kilometers=d).destination(origin, degrees)
-    return round(dest.latitude, 4), round(dest.longitude, 4)
+    return round(dest.latitude, 2), round(dest.longitude, 2)
+
+# check if latitude/longitude A lies between B and C
+def lies_between(A,B,C):
+    def distance(A,B):
+        return math.sqrt((A[0] - B[0])**2 + (A[1] - B[1])**2)
+    a = distance(B,C)
+    b = distance(C,A)
+    c = distance(A,B)
+    return a**2 + b**2 >= c**2 and a**2 + c**2 >= b**2
 
 def __get_latlng(lat, lng, d, bearing='south_west'):
     R = 6378.1 #Radius of the Earth
@@ -29,7 +38,7 @@ def __get_latlng(lat, lng, d, bearing='south_west'):
                              math.cos(d/R)-math.sin(lat1)*math.sin(lat2))
     lat2 = math.degrees(lat2)
     lon2 = math.degrees(lon2)
-    return round(lat2, 4), round(lon2, 4)
+    return round(lat2, 2), round(lon2, 2)
 
 if __name__ == '__main__':
     distance = 11

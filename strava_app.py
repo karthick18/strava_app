@@ -81,8 +81,8 @@ class StravaApp(object):
             #print(seg.name, str(seg.id), seg.start_latlng, seg.end_latlng)
             segment = self.get_segment(seg.id)
             end_latlng = segment.end_latlng
-            if end_latlng[0] >= lat_lng_limit[0] and end_latlng[0] <= ne_lat_lng[0] and \
-               end_latlng[1] >= lat_lng_limit[1] and end_latlng[1] <= ne_lat_lng[1]:
+            start_latlng = segment.start_latlng
+            if latlng.lies_between(end_latlng, lat_lng_limit, ne_lat_lng):
                 print('Adding segment {}/{}'.format(segment.id, segment.name))
                 shortlisted_segments.append(segment)
             else:
@@ -152,11 +152,15 @@ def main(args):
             segment_seen_map[m.id] = True
             segment_list.append(m)
         efforts = 0
+        segment_map = {}
         for s in segment_list:
             efforts += s.athlete_segment_stats.effort_count
+            segment_map[s.name] = s.athlete_segment_stats.effort_count
         athlete = strava_app.get_athlete()
         print('Athlete', athlete.firstname, 'ID', athlete.id, 'Segments', len(segment_list), 'efforts', efforts)
         print(segment_list)
+        for segment, efforts in segment_map.items():
+            print('Segment {}, Efforts {}'.format(segment, efforts))
     except FileNotFoundError:
         print("No access token stored yet, visit http://localhost:8000/ to get it")
         print("After visiting that url, a pickle file is stored, run this file again to upload your activity")
@@ -173,7 +177,7 @@ if __name__ == '__main__':
                         help='Specify distance in kilometers for explore for segments from the segment coordinates north-east corner from distance start')
     parser.add_argument('-distance-start', '--distance-start', type=int, default=5,
                         help='Specify distance start in kilometers for explore for segments from the segment coordinates north-east corner to specified distance')
-    parser.add_argument('-within', '--within', type=float, default=0.1,
+    parser.add_argument('-within', '--within', type=float, default=1.0,
                         help='Specify the max range in kilometers to search for the end of the segment from north-east corner')
     parser.add_argument('-segment-id', '--segment-id', type=str, default='',
                         help='Segment ID to get details of end latitude and longitude to use with explore segments')
