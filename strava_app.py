@@ -70,8 +70,8 @@ class StravaApp(object):
         #print(*bounds)
         ne_lat_lng = bounds[2], bounds[3]
         lat_lng_limit = latlng.get_latlng(*ne_lat_lng, within_km, bearing=bearing)
-        #if lat_lng_limit[0] > ne_lat_lng[0] and lat_lng_limit[1] > ne_lat_lng[1]:
-        #    ne_lat_lng, lat_lng_limit = lat_lng_limit, ne_lat_lng
+        if lat_lng_limit[0] > ne_lat_lng[0] and lat_lng_limit[1] > ne_lat_lng[1]:
+           ne_lat_lng, lat_lng_limit = lat_lng_limit, ne_lat_lng
 
         #print('limits', lat_lng_limit)
         # we explore all segments and filter out those whose north east corner is within the limit/range
@@ -83,6 +83,10 @@ class StravaApp(object):
             end_latlng = segment.end_latlng
             start_latlng = segment.start_latlng
             if latlng.lies_between(end_latlng, lat_lng_limit, ne_lat_lng):
+                print('Adding segment {}/{}'.format(segment.id, segment.name))
+                shortlisted_segments.append(segment)
+            elif end_latlng[0] >= lat_lng_limit[0] and end_latlng[0] <= ne_lat_lng[0] and \
+                 end_latlng[1] >= lat_lng_limit[1] and end_latlng[1] <= ne_lat_lng[1]:
                 print('Adding segment {}/{}'.format(segment.id, segment.name))
                 shortlisted_segments.append(segment)
             else:
@@ -117,9 +121,9 @@ def main(args):
     if distance_start > distance:
         distance_start = 0
     within = args.within
-    if within > 0.5:
+    if within > 10.0:
         print('Setting range for segment to within 0.5 kms as range is too high from segment end')
-        within = 0.5
+        within = 10.0
     strava_app = StravaApp()
     try:
         strava_app.client = load_object('client.pkl')
@@ -134,13 +138,13 @@ def main(args):
         # get the latitude and longitude for the acceptable segment north-east within limit of above segment
         # get second coords within "distance" kms of the north-east corner of the segment
         matched_segments = []
-        for d in range(distance_start, distance, 2):
+        for d in range(distance_start, distance+1, 2):
             lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='south_west')
             print('Exploring segments within distance', d, 'km of', *lat_lng)
             matched_segments += strava_app.explore_segments((lat2, lon2, *lat_lng), within_km=within)
 
         # get second coords within "distance" kms of the south-west corner of the segment            
-        for d in range(distance_start, distance, 2):
+        for d in range(distance_start, distance+1, 2):
             lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='north_east')
             print('Exploring segments within distance', d, 'km of', *lat_lng)
             matched_segments += strava_app.explore_segments((*lat_lng, lat2, lon2), within_km=within, bearing='north_east')
