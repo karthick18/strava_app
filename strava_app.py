@@ -179,7 +179,7 @@ if __name__ == '__main__':
                         help='Specify coordinates segment north-east corner latitude and longitude')
     parser.add_argument('-distance', '--distance', type=int, default=10,
                         help='Specify distance in kilometers for explore for segments from the segment coordinates north-east corner from distance start')
-    parser.add_argument('-distance-start', '--distance-start', type=int, default=5,
+    parser.add_argument('-distance-start', '--distance-start', type=int, default=0,
                         help='Specify distance start in kilometers for explore for segments from the segment coordinates north-east corner to specified distance')
     parser.add_argument('-within', '--within', type=float, default=1.0,
                         help='Specify the max range in kilometers to search for the end of the segment from north-east corner')
