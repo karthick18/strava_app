@@ -70,8 +70,8 @@ class StravaApp(object):
         #print(*bounds)
         ne_lat_lng = bounds[2], bounds[3]
         lat_lng_limit = latlng.get_latlng(*ne_lat_lng, within_km, bearing=bearing)
-        if lat_lng_limit[0] > ne_lat_lng[0] and lat_lng_limit[1] > ne_lat_lng[1]:
-            ne_lat_lng, lat_lng_limit = lat_lng_limit, ne_lat_lng
+        #if lat_lng_limit[0] > ne_lat_lng[0] and lat_lng_limit[1] > ne_lat_lng[1]:
+        #    ne_lat_lng, lat_lng_limit = lat_lng_limit, ne_lat_lng
 
         #print('limits', lat_lng_limit)
         # we explore all segments and filter out those whose north east corner is within the limit/range
