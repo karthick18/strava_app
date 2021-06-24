@@ -12,6 +12,7 @@ import sys
 import argparse
 import uvicorn
 import json
+import re
 from argparse import ArgumentParser
 
 app = FastAPI()
@@ -30,8 +31,9 @@ def load_object(filename):
 
 @app.get("/")
 def read_root():
+    scope = ['read','read_all','profile:read_all','profile:write','activity:read','activity:read_all','activity:write']
     authorize_url = client.authorization_url(client_id=strava_secret.CLIENT_ID,
-                                             redirect_uri=REDIRECT_URL)
+                                             redirect_uri=REDIRECT_URL, scope=scope)
     return RedirectResponse(authorize_url)
 
 
@@ -53,6 +55,7 @@ def get_code(state=None, code=None, scope=None):
 class StravaApp(object):
     def __init__(self):
         self.client = client
+        self.description_regex = re.compile(r'.*#([0-9]+)$', re.MULTILINE|re.DOTALL)
 
     def check_token(self):
         if time.time() > self.client.token_expires_at:
@@ -106,15 +109,14 @@ class StravaApp(object):
         except stravalib.exc.ObjectNotFound:
             return None
 
-    def get_activities(self, limit=1000):
-        my_cols = ['average_speed', 'total_elevation_gain', 'distance', 'type']
+    def get_activities(self, limit=1000, include_all_efforts=True):
         activities = self.client.get_activities(limit=limit)
         data = []
         for act in activities:
-            d = act.to_dict()
-            data.append([d.get(col) for col in my_cols])
-        df = pd.DataFrame(data, columns=my_cols)
-        return df
+            if include_all_efforts is True:
+                act = self.client.get_activity(activity_id=int(act.id), include_all_efforts=True)
+            data.append(act)
+        return data
 
     def get_athlete(self):
         return self.client.get_athlete()
@@ -187,6 +189,40 @@ def main(args):
             total_efforts += efforts
             print('Segment {}, Efforts {}'.format(segment, efforts))
         print('Total efforts {}'.format(total_efforts))
+        update_activity = args.update_activity.strip()
+        if update_activity:
+            activity = strava_app.client.get_activity(activity_id=int(update_activity), include_all_efforts=True)
+        else:
+            # update last activity in case there are segment matches with segment effort count in description
+            activities = strava_app.get_activities(limit=1)
+            if len(activities) > 0:
+                activity = activities[-1]
+            else:
+                activity = None
+        if activity:
+            print('Last activity', activity.name, 'Description', activity.description, 'Date', activity.start_date)
+            segment_ids = [ int(segment.id) for segment in segment_list ]
+            segment_match = False
+            for effort in activity.segment_efforts:
+                print('name', effort.name, 'id', effort.segment.id)
+                if effort.segment.id in segment_ids:
+                    print('Segment', effort.segment.id, 'matched', segment_ids)
+                    segment_match = True
+                    break
+            if segment_match is True:
+                description = activity.description
+                m = strava_app.description_regex.match(description)
+                if m is not None:
+                    counter = int(m.groups()[0])
+                    if counter != total_efforts:
+                        description = activity.description[:m.regs[-1][0]]
+                        description = '{}{}'.format(description, total_efforts)
+                else:
+                    description = '{}\n#{}'.format(description, total_efforts)
+                if description != activity.description:
+                    print('Updating last activity with description:', description)
+                    strava_app.client.update_activity(activity_id=activity.id, description=description)
+
     except FileNotFoundError:
         print("No access token stored yet, visit http://localhost:8000/ to get it")
         print("After visiting that url, a pickle file is stored, run this file again to upload your activity")
@@ -199,6 +235,10 @@ if __name__ == '__main__':
     parser.add_argument('-segment-stats', '--segment-stats', type=str,
                         default='',
                         help='Specify the file to read segment ids')
+    parser.add_argument('-update-activity', '--update-activity', type=str,
+                        default='',
+                        help='Update activity description if activity overlaps a segment in segment-stats.'
+                        'Default would be to match against last activity')
     parser.add_argument('-segment-coordinates', '--segment-coordinates', nargs='+', type=float,
                         default=default_coordinates,
                         help='Specify coordinates segment north-east corner latitude and longitude')
