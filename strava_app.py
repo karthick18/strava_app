@@ -4,12 +4,14 @@ import pickle
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from stravalib.client import Client
+import stravalib.exc
 import pandas as pd
 import latlng
 import strava_secret
 import sys
 import argparse
 import uvicorn
+import json
 from argparse import ArgumentParser
 
 app = FastAPI()
@@ -69,9 +71,11 @@ class StravaApp(object):
             raise ValueError("Bounds should be a list of size 4. Specified {}".format(bounds))
         #print(*bounds)
         ne_lat_lng = bounds[2], bounds[3]
-        lat_lng_limit = latlng.get_latlng(*ne_lat_lng, within_km, bearing=bearing)
-        if lat_lng_limit[0] > ne_lat_lng[0] and lat_lng_limit[1] > ne_lat_lng[1]:
-           ne_lat_lng, lat_lng_limit = lat_lng_limit, ne_lat_lng
+        if bearing == 'north_east':
+            lat_lng_limit = latlng.get_latlng(bounds[0], bounds[1], within_km, bearing=bearing)
+            ne_lat_lng, lat_lng_limit = lat_lng_limit, (bounds[0], bounds[1])
+        else:
+            lat_lng_limit = latlng.get_latlng(*ne_lat_lng, within_km, bearing=bearing)
 
         #print('limits', lat_lng_limit)
         # we explore all segments and filter out those whose north east corner is within the limit/range
@@ -82,21 +86,25 @@ class StravaApp(object):
             segment = self.get_segment(seg.id)
             end_latlng = segment.end_latlng
             start_latlng = segment.start_latlng
-            if latlng.lies_between(end_latlng, lat_lng_limit, ne_lat_lng):
+            if latlng.lies_between(end_latlng, ne_lat_lng, lat_lng_limit):
                 print('Adding segment {}/{}'.format(segment.id, segment.name))
                 shortlisted_segments.append(segment)
-            elif end_latlng[0] >= lat_lng_limit[0] and end_latlng[0] <= ne_lat_lng[0] and \
-                 end_latlng[1] >= lat_lng_limit[1] and end_latlng[1] <= ne_lat_lng[1]:
-                print('Adding segment {}/{}'.format(segment.id, segment.name))
-                shortlisted_segments.append(segment)
+            #elif latlng.__lies_between(end_latlng, ne_lat_lng, lat_lng_limit):
+            #    print('Adding segment {}/{}'.format(segment.id, segment.name))
+            #    shortlisted_segments.append(segment)
+            #elif end_latlng[0] >= lat_lng_limit[0] and end_latlng[0] <= ne_lat_lng[0] and \
+            #     end_latlng[1] >= lat_lng_limit[1] and end_latlng[1] <= ne_lat_lng[1]:
+            #    print('Adding segment {}/{}'.format(segment.id, segment.name))
+            #    shortlisted_segments.append(segment)
             else:
                 print('Skipping segment', segment.name, segment.id, segment.end_latlng)
         return shortlisted_segments
 
     def get_segment(self, segment_id):
-        segment = self.client.get_segment(segment_id)
-        #print(segment.name, segment.start_latlng, segment.end_latlng, segment.athlete_segment_stats.effort_count)
-        return segment#.start_latlng, segment.end_latlng
+        try:
+            return self.client.get_segment(segment_id)
+        except stravalib.exc.ObjectNotFound:
+            return None
 
     def get_activities(self, limit=1000):
         my_cols = ['average_speed', 'total_elevation_gain', 'distance', 'type']
@@ -131,30 +139,41 @@ def main(args):
         lat_lng = segment_coords #strava_app.get_segment(3991086)
         if args.segment_id.strip() != '':
             segment = strava_app.get_segment(args.segment_id)
-            print(segment.name, segment.start_latlng, segment.end_latlng)
+            if segment is not None:
+                print(segment.name, segment.start_latlng, segment.end_latlng)
+            else:
+                print('Segment {} not found'.format(args.segment_id))
             sys.exit(0)
 
         print(segment_coords, distance, within)
         # get the latitude and longitude for the acceptable segment north-east within limit of above segment
         # get second coords within "distance" kms of the north-east corner of the segment
-        matched_segments = []
-        for d in range(distance_start, distance+1, 2):
-            lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='south_west')
-            print('Exploring segments within distance', d, 'km of', *lat_lng)
-            matched_segments += strava_app.explore_segments((lat2, lon2, *lat_lng), within_km=within)
+        segment_stats_file = args.segment_stats.strip()
+        if segment_stats_file != '':
+            with open(segment_stats_file) as f:
+                segment_id_data = json.load(f)
+            segment_ids = segment_id_data['segment_ids']
+            segment_list = list(filter(lambda segment: segment is not None, map(lambda id: strava_app.get_segment(id), segment_ids)))
+        else:
+            matched_segments = []
+            for d in range(distance_start, distance+1, 2):
+                lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='south_west')
+                print('Exploring segments within distance', d, 'km of', *lat_lng)
+                matched_segments += strava_app.explore_segments((lat2, lon2, *lat_lng), within_km=within)
 
-        # get second coords within "distance" kms of the south-west corner of the segment            
-        for d in range(distance_start, distance+1, 2):
-            lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='north_east')
-            print('Exploring segments within distance', d, 'km of', *lat_lng)
-            matched_segments += strava_app.explore_segments((*lat_lng, lat2, lon2), within_km=within, bearing='north_east')
-        segment_list = []
-        segment_seen_map = {}
-        for m in matched_segments:
-            if m.id in segment_seen_map:
-                continue
-            segment_seen_map[m.id] = True
-            segment_list.append(m)
+            # get second coords within "distance" kms of the south-west corner of the segment
+            for d in range(distance_start, distance+1, 2):
+                lat2, lon2 = latlng.get_latlng(*lat_lng, d, bearing='north_east')
+                print('Exploring segments within distance', d, 'km of', *lat_lng)
+                matched_segments += strava_app.explore_segments((*lat_lng, lat2, lon2), within_km=within, bearing='north_east')
+            segment_list = []
+            segment_seen_map = {}
+            for m in matched_segments:
+                if m.id in segment_seen_map:
+                    continue
+                segment_seen_map[m.id] = True
+                segment_list.append(m)
+
         efforts = 0
         segment_map = {}
         for s in segment_list:
@@ -163,8 +182,11 @@ def main(args):
         athlete = strava_app.get_athlete()
         print('Athlete', athlete.firstname, 'ID', athlete.id, 'Segments', len(segment_list), 'efforts', efforts)
         print(segment_list)
+        total_efforts = 0
         for segment, efforts in segment_map.items():
+            total_efforts += efforts
             print('Segment {}, Efforts {}'.format(segment, efforts))
+        print('Total efforts {}'.format(total_efforts))
     except FileNotFoundError:
         print("No access token stored yet, visit http://localhost:8000/ to get it")
         print("After visiting that url, a pickle file is stored, run this file again to upload your activity")
@@ -174,6 +196,9 @@ if __name__ == '__main__':
     default_coordinates = [37.512844, -121.881369]
     parser = ArgumentParser(description='Strava app to explore segments',
                             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-segment-stats', '--segment-stats', type=str,
+                        default='',
+                        help='Specify the file to read segment ids')
     parser.add_argument('-segment-coordinates', '--segment-coordinates', nargs='+', type=float,
                         default=default_coordinates,
                         help='Specify coordinates segment north-east corner latitude and longitude')

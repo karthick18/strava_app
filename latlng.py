@@ -17,7 +17,17 @@ def get_latlng(lat, lng, d, bearing='south_west'):
     return round(dest.latitude, 2), round(dest.longitude, 2)
 
 # check if latitude/longitude A lies between B and C
-def lies_between(A,B,C):
+def lies_between(A, NE, SW):
+    top, left, bottom, right = NE[0], SW[1], SW[0], NE[1]
+    latitude, longitude = A[0], A[1]
+    if top >= latitude and latitude >= bottom:
+            if left <= right and left <= longitude and longitude <= right:
+                    return True
+            elif left > right and (left <= longitude or longitude <= right):
+                return True
+    return __lies_between(A, NE, SW)
+
+def __lies_between(A,B,C):
     def distance(A,B):
         return math.sqrt((A[0] - B[0])**2 + (A[1] - B[1])**2)
     a = distance(B,C)
