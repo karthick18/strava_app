@@ -2,3 +2,4 @@ uvicorn
 stravalib
 fastapi
 pandas
+geopy
